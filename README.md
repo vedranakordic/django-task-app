@@ -112,7 +112,6 @@ The app supports importing tasks from CSV and TXT files, and exporting tasks to 
 
 - `tasks/` – Django app with models, views, forms, and templates
 - `templates/` – HTML templates for the app
-- `static/` – (optional) static files (CSS, JS)
 - `manage.py` – Django management script
 
 ---
