@@ -52,7 +52,10 @@ def user_register(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             form.save()
             username = form.cleaned_data.get('username')
-            messages.success(request, f'{username} je uspješno registriran!')
+            messages.success(
+                            request,
+                            f'{username} has been successfully registered!'
+                            )
             return redirect('login')  
     else:
         form = UserRegisterForm()
@@ -262,8 +265,8 @@ def export_tasks_pdf(request: HttpRequest) -> HttpResponse:
     for task in tasks:
         line = (
                 f"{task.title} - {task.description} - "
-                f"{'Dovršeno' if task.completed else 'Nedovršeno'} - "
-                f"{task.due_date.strftime('%Y-%m-%d %H:%M') if task.due_date else 'Nema datuma'} - "
+                f"{'Completed' if task.completed else 'Incomplete'} - "
+                f"{task.due_date.strftime('%Y-%m-%d %H:%M') if task.due_date else 'No due date'} - "
                 f"{task.priority}"
                 )
         p.drawString(40, y, line)
