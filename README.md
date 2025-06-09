@@ -114,13 +114,6 @@ The app supports importing tasks from CSV and TXT files, and exporting tasks to 
 - `templates/` – HTML templates for the app
 - `manage.py` – Django management script
 
----
 
-## Notes
 
-- Only logged-in users can manage tasks.
-- Admin users see all tasks; regular users see only their own.
-- Asynchronous import is used for faster processing of large files.
-
----
 
