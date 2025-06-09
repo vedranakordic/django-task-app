@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        background-color: #f4f4f4;
+    }
+
+    h1 {
+        color: #333;
+    }
+
+    .task-list {
+        list-style-type: none;
+        padding: 0;
+    }
+
+    .task-item {
+        background-color: white;
+        margin-bottom: 10px;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .task-title {
+        font-weight: bold;
+    }
+
+    .task-actions a {
+        margin-left: 10px;
+        text-decoration: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.9em;
+    }
+
+    .done {
+        color: green;
+    }
+
+    .not-done {
+        color: red;
+    }
+
+    .btn {
+    background-color: rgb(4, 1, 96);
+    color: white;
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    margin-left: 5px;
+    display: inline-block;
+    transition: background-color 0.2s ease;
+    }
+
+    .btn:hover {
+        background-color: #0056b3;
+    }
+
+    .btn.small {
+        font-size: 0.8em;
+        padding: 5px 10px;
+    }
+
+    .btn.delete {
+        background-color: #c9302c;
+    }
+
+    .btn.delete:hover {
+        background-color: #a02828;
+    }
+
+    input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    .add-task {
+        display: inline-block;
+        margin-bottom: 20px;
+        text-decoration: none;
+        padding: 10px 15px;
+        background-color:rgb(9, 10, 44);
+        color: white;
+        border-radius: 5px;
+    }
+
+    .add-task:hover {
+        background-color:#0056b3;
+    }
+</style>
+</head>
+{% extends "base.html" %}
+
+{% block title %}Task List{% endblock %}
+
+{% block content %}
+<h1>📝 Tasks List</h1>
+
+    <a href="{% url 'add_task' %}" class="add-task">➕ Add New Task</a>
+    <a href="{% url 'upload_tasks_csv' %}" class="add-task">📤 Upload Tasks from CSV</a>
+    <a href="{% url 'upload_tasks_txt' %}" class="add-task">📤 Upload Tasks from TXT</a>
+
+<!-- Priority Filter -->
+<form method="get" action="{% url 'task_list' %}" style="margin-bottom: 30px;">
+    <label for="priority-select"><strong>Priority:</strong></label>
+    <select id="priority-select" name="priority" onchange="this.form.submit()" style="margin-left: 10px; padding: 5px 10px; border-radius: 4px; border: 1px solid #ccc;">
+        <option value="" {% if not request.GET.priority %}selected{% endif %}>All</option>
+        <option value="urgent" {% if request.GET.priority == 'urgent' %}selected{% endif %}>Urgent</option>
+        <option value="important" {% if request.GET.priority == 'important' %}selected{% endif %}>Important</option>
+        <option value="later" {% if request.GET.priority == 'later' %}selected{% endif %}>Later</option>
+    </select>
+</form>
+
+<table style="width: 100%; border-collapse: collapse; background-color: white;">
+    <thead>
+        <tr style="background-color: #09142c; color: white;">
+            <th style="padding: 10px; text-align: center;">✔️</th>
+            <th style="padding: 10px;text-align: left;">Title</th>
+            <th style="padding: 10px;text-align: left;">Priority</th>
+            <th style="padding: 10px;text-align: left;">Status</th>
+            <th style="padding: 10px;"> </th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for task in tasks %}
+        <tr style="border-bottom: 1px solid #ccc;">
+            <td style="padding: 10px; text-align: center;">
+                <form method="post" action="{% url 'toggle_task' task.pk %}" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="checkbox" onchange="this.form.submit()" {% if task.completed %}checked{% endif %}>
+                </form>
+            </td>
+            <td style="padding: 10px;">{{ task.title }}</td>
+            <td style="padding: 10px;"><strong>{{ task.get_priority_display }}</strong></td>
+            <td style="padding: 10px;">
+                {% if task.completed %}
+                    <span class="done">✔️ Completed</span>
+                {% else %}
+                    <span class="not-done">❌ Not Completed</span>
+                {% endif %}
+            </td>
+            <td style="padding: 10px; text-align: right;">
+                <a href="{% url 'edit_task' task.pk %}" class="btn small"> Edit</a>
+                <a href="{% url 'delete_task' task.pk %}" class="btn small delete"> Delete</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" style="padding: 10px;">No tasks available.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div style="margin-top: 20px; text-align: right;">
+    <form method="post" action="{% url 'export_tasks_csv' %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success"> Download CSV</button>
+    </form>
+
+    <form method="post" action="{% url 'export_tasks_pdf' %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger"> Download PDF</button>
+    </form>
+</div>
+
+{% endblock %}

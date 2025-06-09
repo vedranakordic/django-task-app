@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Task Manager{% endblock %}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f4f4f4;
+        }
+
+        .nav {
+            margin-bottom: 20px;
+        }
+
+        .nav a {
+            margin-right: 10px;
+            text-decoration: none;
+            color: rgb(9, 10, 44);
+        }
+
+        .nav span {
+            font-weight: bold;
+        }
+        .nav-right {
+            text-align: right;
+            margin-bottom: 20px;
+        }
+
+        .logout-link {
+            background-color: rgb(9, 10, 44);
+            color: white;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .logout-link:hover {
+            background-color: #0056b3;
+            color: white;
+        }
+
+
+    </style>
+</head>
+<body>
+    <div class="nav-right">
+    {% if user.is_authenticated %}
+        Hello, {{ user.username }}! |
+        <form action="{% url 'logout' %}" method="post" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="logout-link">Logout</button>
+        </form>
+    {% else %}
+        <a href="{% url 'login' %}">Login</a>
+        <a href="{% url 'register' %}">Registeration</a>
+    {% endif %}
+    </div>
+
+
+    {% block content %}
+    {% endblock %}
+</body>
+</html>

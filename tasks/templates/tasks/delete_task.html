@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block title %}Obriši zadatak{% endblock %}
+
+{% block content %}
+    <h1>🗑️ Obriši zadatak</h1>
+    <p>Jesi li sigurna da želiš obrisati: "<strong>{{ task.title }}</strong>"?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">✅ Da, obriši</button>
+        <a href="{% url 'task_list' %}" class="btn">❌ Odustani</a>
+    </form>
+{% endblock %}
