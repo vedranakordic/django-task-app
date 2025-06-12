@@ -3,7 +3,6 @@ from tasks.models import Task
 from .forms import TaskForm
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import login
 from .forms import UserRegisterForm  
 from django.http import HttpRequest, HttpResponse
 import csv
@@ -15,6 +14,60 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import time
+from abc import ABC, abstractmethod
+
+
+class TaskExporter(ABC):
+    @abstractmethod
+    def export(self, tasks, response):
+        """Export tasks to the given response (file-like object)."""
+        pass
+
+
+class CSVTaskExporter(TaskExporter):
+    def export(self, tasks, response):
+        writer = csv.writer(response)
+        writer.writerow(
+            ['Title', 'Description', 'Completed', 'Due Date', 'Priority']
+        )
+        for task in tasks:
+            writer.writerow([
+                task.title,
+                task.description,
+                'Yes' if task.completed else 'No',
+                task.due_date.strftime('%Y-%m-%d %H:%M') if task.due_date else '',
+                task.priority,
+            ])
+
+
+class PDFTaskExporter(TaskExporter):
+    def export(self, tasks, response):
+        p = canvas.Canvas(response, pagesize=letter)
+        width, height = letter
+
+        y = height - 40
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(40, y, "List of Tasks")
+        y -= 30
+
+        p.setFont("Helvetica", 12)
+        for task in tasks:
+            line = (
+                f"{task.title} - {task.description} - "
+                f"{'Completed' if task.completed else 'Incomplete'} - "
+                f"{task.due_date.strftime('%Y-%m-%d %H:%M') if task.due_date else 'No due date'} - "
+                f"{task.priority}"
+            )
+            p.drawString(40, y, line)
+            y -= 20
+            if y < 40:
+                p.showPage()
+                y = height - 40
+                p.setFont("Helvetica", 12)
+
+        p.showPage()
+        p.save()
+
 
 executor = ThreadPoolExecutor()
 
@@ -44,7 +97,7 @@ def save_task_sync(task_data):
 async def save_task_async(task_data):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(executor, save_task_sync, task_data)
-
+   
 
 def user_register(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
@@ -130,32 +183,51 @@ def toggle_task(request: HttpRequest, pk: int) -> HttpResponse:
 def upload_tasks_csv(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = UploadFileForm(request.POST, request.FILES)
-        
+
         if form.is_valid():
             file = form.cleaned_data['file']
-            decoded = file.read().decode('utf-8').splitlines()
-            # Create a CSV DictReader to interpret each line as a dictionary 
-            # (keys are column names).
-            reader = csv.DictReader(decoded)
+            try:
+                decoded = file.read().decode('utf-8').splitlines()
+            except UnicodeDecodeError:
+                file.seek(0)
+                decoded = file.read().decode('cp1252').splitlines()
+
+            reader = csv.reader([decoded[0]])
+            original_headers = next(reader)
+
+            header_map = {
+                'title': ['title', 'Title'],
+                'description': ['description', 'Description'],
+                'completed': ['completed', 'Completed'],
+                'due_date': ['due_date', 'Due Date', 'DueDate'],
+                'priority': ['priority', 'Priority']
+            }
+
+            def get_standard_header(header):
+                h = header.strip().replace(' ', '_').lower()
+                for key, vals in header_map.items():
+                    if h in [v.strip().replace(' ', '_').lower() for v in vals]:
+                        return key
+                return h
+
+            mapped_headers = [get_standard_header(h) for h in original_headers]
+
+            reader = csv.DictReader(decoded[1:], fieldnames=mapped_headers)
 
             tasks_to_save = []
             for row in reader:
-                title = row.get('title', '').strip()
+                title = (row.get('title') or '').strip()
                 if not title:
                     continue
 
-                description = row.get('description', '').strip()
-                completed = row.get(
-                    'completed', 'False'
-                ).strip().lower() in ('true', '1', 'yes')
-                priority = row.get('priority', 'later').strip().lower()
-                due_date_str = row.get('due_date', '').strip()
+                description = (row.get('description') or '').strip()
+                completed_raw = (row.get('completed') or 'False').strip().lower()
+                completed = completed_raw in ('true', '1', 'yes')
+                priority = (row.get('priority') or 'later').strip().lower()
+                due_date_str = (row.get('due_date') or '').strip()
 
                 try:
-                    due_date = datetime.strptime(
-                                                due_date_str,
-                                                '%Y-%m-%d %H:%M'
-                                                )
+                    due_date = datetime.strptime(due_date_str, '%Y-%m-%d %H:%M')
                 except (ValueError, TypeError):
                     due_date = datetime.now()
 
@@ -164,25 +236,21 @@ def upload_tasks_csv(request: HttpRequest) -> HttpResponse:
                     'title': title,
                     'description': description,
                     'completed': completed,
-                    'priority': priority if priority in [
-                                                        'urgent', 
-                                                        'important',
-                                                        'later'
-                                                        ] else 'later',
+                    'priority': priority if priority in ['urgent', 'important', 'later'] else 'later',
                     'due_date': due_date
                 })
 
             async def save_all_tasks():
                 await asyncio.gather(
                     *(save_task_async(data) for data in tasks_to_save)
-                    )
+                )
 
-            asyncio.run(save_all_tasks())  
+            asyncio.run(save_all_tasks())
 
             return redirect('task_list')
     else:
         form = UploadFileForm()
-        
+
     return render(request, 'tasks/upload_tasks_csv.html', {'form': form})
 
 
@@ -253,31 +321,9 @@ def export_tasks_pdf(request: HttpRequest) -> HttpResponse:
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = 'attachment; filename="tasks.pdf"'
 
-    p = canvas.Canvas(response, pagesize=letter)
-    width, height = letter
+    exporter = PDFTaskExporter()
+    exporter.export(tasks, response)
 
-    y = height - 40
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(40, y, "List of Tasks")
-    y -= 30
-
-    p.setFont("Helvetica", 12)
-    for task in tasks:
-        line = (
-                f"{task.title} - {task.description} - "
-                f"{'Completed' if task.completed else 'Incomplete'} - "
-                f"{task.due_date.strftime('%Y-%m-%d %H:%M') if task.due_date else 'No due date'} - "
-                f"{task.priority}"
-                )
-        p.drawString(40, y, line)
-        y -= 20
-        if y < 40:
-            p.showPage()
-            y = height - 40
-            p.setFont("Helvetica", 12)
-
-    p.showPage()
-    p.save()
     return response
 
 
@@ -291,24 +337,7 @@ def export_tasks_csv(request: HttpRequest) -> HttpResponse:
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="tasks.csv"'
 
-    writer = csv.writer(response)
-    writer.writerow(
-                    ['Title', 
-                     'Description', 
-                     'Completed',
-                     'Due Date',
-                     'Priority']
-                    )
-
-    for task in tasks:
-        writer.writerow([
-            task.title,
-            task.description,
-            'Yes' if task.completed else 'No',
-            task.due_date.strftime('%Y-%m-%d %H:%M') if task.due_date else '',
-            task.priority,
-        ])
+    exporter = CSVTaskExporter()
+    exporter.export(tasks, response)
 
     return response
-
-
